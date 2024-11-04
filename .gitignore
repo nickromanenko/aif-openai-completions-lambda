@@ -1,0 +1,12 @@
+node_modules
+TODO
+.env
+.env.*
+
+build
+
+.env*
+.flaskenv*
+!.env.project
+!.env.vault
+!.env.me
