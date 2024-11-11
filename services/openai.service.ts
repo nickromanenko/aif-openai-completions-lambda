@@ -9,7 +9,7 @@ const systemInstruction = {
     content: instructions,
 };
 
-export async function sendMessage(threadId: string, content: { text: string; url?: string }) {
+export async function sendMessage(threadId: string, content: { text: string }) {
     console.log('sendMessage', threadId, JSON.stringify(content));
     const query = content.text;
     let responseText = 'Sorry, I am not able to understand your query. Please try again.';

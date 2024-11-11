@@ -1,5 +1,5 @@
 import { APIGatewayProxyEventV2, APIGatewayProxyStructuredResultV2 } from 'aws-lambda';
-import { v4 as uuidv4 } from 'uuid';
+import { getOrCreateUser, getUser } from './models/users.model';
 import { connectDb } from './services/db.service';
 import { sendMessage } from './services/openai.service';
 
@@ -14,48 +14,62 @@ export const handler = async (event: APIGatewayProxyEventV2): Promise<APIGateway
             route = pathParts[0];
         }
         console.log('{!} Function METHOD:', method, '{!} Function ROUTE:', route);
+        try {
+            await connectDb();
+        } catch (error) {
+            console.error('Error connecting to the database', error);
+            return {
+                statusCode: 500,
+                body: 'Error connecting to the database',
+            };
+        }
+
+        if (!event.body) {
+            return {
+                statusCode: 400,
+                body: 'Insufficient data',
+            };
+        }
 
         switch (route) {
             case 'start':
-                const threadId = uuidv4();
-                return {
-                    statusCode: 200,
-                    body: JSON.stringify({ thread_id: threadId }),
-                };
-            case 'chat':
-                try {
-                    await connectDb();
-                } catch (error) {
-                    console.error('Error connecting to the database', error);
-                    return {
-                        statusCode: 500,
-                        body: 'Error connecting to the database',
-                    };
-                }
-
-                if (!event.body) {
+                const startPayload = JSON.parse(event.body!) as { name: string; email: string };
+                if (!startPayload.name || !startPayload.email) {
                     return {
                         statusCode: 400,
                         body: 'Insufficient data',
                     };
                 }
-                const body = JSON.parse(event.body!) as { message: { text: string; url?: string }; thread_id: string };
-                console.log('BODY:', body);
-                if (!body.thread_id) {
+
+                const user = await getOrCreateUser(startPayload.name, startPayload.email);
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({ thread_id: user.id }),
+                };
+            case 'chat':
+                const chatPayload = JSON.parse(event.body!) as { message: { text: string }; thread_id: string };
+                console.log('BODY:', chatPayload);
+                if (!chatPayload.thread_id) {
                     return {
                         statusCode: 400,
                         body: 'No thread_id',
                     };
                 }
-                if (!body.message || !body.message.text) {
+                const existingUser = await getUser(chatPayload.thread_id);
+                if (!existingUser) {
+                    return {
+                        statusCode: 400,
+                        body: 'Thread_id is invalid',
+                    };
+                }
+
+                if (!chatPayload.message || !chatPayload.message.text) {
                     return {
                         statusCode: 400,
                         body: 'Insufficient data',
                     };
                 }
-
-                const response = await sendMessage(body.thread_id, body.message);
-
+                const response = await sendMessage(chatPayload.thread_id, chatPayload.message);
                 return {
                     statusCode: 200,
                     body: JSON.stringify({ response }),
